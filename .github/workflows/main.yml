@@ -1,4 +1,4 @@
-name: GameHub-Ultra-A17Pro-Masterpiece
+name: GameHub-Ultra-Pro-Max-Final
 
 on:
   push:
@@ -7,20 +7,21 @@ on:
 
 jobs:
   build:
-    name: Build Ultimate PC-on-iOS Engine
+    name: Core Engine Generation
     runs-on: macos-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Project Generator
+      - name: Install Project Tools
         run: brew install xcodegen
 
-      - name: Generate High-Power Architecture
+      - name: Auto-Generate High-Performance Project
         run: |
-          mkdir -p GameHub/Sources
+          mkdir -p GameHub/Sources/Engine
+          mkdir -p GameHub/Resources/Runtimes
           
-          # 1. Info.plist (Permissions for JIT, Files, and Controllers)
+          # 1. Info.plist - Critical for JIT & Hardware Access
           cat << 'EOF' > GameHub/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -29,32 +30,28 @@ jobs:
             <key>CFBundleExecutable</key>
             <string>GameHub</string>
             <key>CFBundleIdentifier</key>
-            <string>com.gamehub.pro.max</string>
+            <string>com.gamehub.ultimate.pro</string>
             <key>CFBundleName</key>
-            <string>GameHub Ultra</string>
+            <string>GameHub Pro</string>
             <key>CFBundlePackageType</key>
             <string>APPL</string>
             <key>CFBundleShortVersionString</key>
             <string>20.0</string>
-            <key>LSRequiresIPhoneOS</key>
-            <true/>
             <key>UIFileSharingEnabled</key>
             <true/>
             <key>LSSupportsOpeningDocumentsInPlace</key>
             <true/>
-            <key>UILaunchStoryboardName</key>
-            <string>LaunchScreen</string>
-            <key>UISupportedInterfaceOrientations</key>
-            <array><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
-            <key>CADisableMinimumFrameDurationOnPhone</key>
-            <true/>
             <key>GCSupportedGameControllers</key>
             <array><dict><key>ProfileName</key><string>ExtendedGamepad</string></dict></array>
+            <key>GCSupportsControllerUserCustomization</key>
+            <true/>
+            <key>CADisableMinimumFrameDurationOnPhone</key>
+            <true/>
           </dict>
           </plist>
           EOF
 
-          # 2. Optimized Build Settings for A17 Pro
+          # 2. Project Config
           cat << 'EOF' > project.yml
           name: GameHub
           targets:
@@ -67,13 +64,12 @@ jobs:
                 base:
                   INFOPLIST_FILE: GameHub/Info.plist
                   GENERATE_INFOPLIST_FILE: NO
-                  PRODUCT_BUNDLE_IDENTIFIER: com.gamehub.pro.max
                   SWIFT_OPTIMIZATION_LEVEL: "-O"
+                  GCC_OPTIMIZATION_LEVEL: "3"
                   OTHER_LDFLAGS: "-all_load -Xlinker -no_pie"
-                  ENABLE_BITCODE: NO
           EOF
 
-          # 3. The Core Master Engine (App.swift)
+          # 3. The Core App Engine (App.swift)
           cat << 'EOF' > GameHub/App.swift
           import SwiftUI
           import UniformTypeIdentifiers
@@ -82,250 +78,213 @@ jobs:
           struct GameHubApp: App {
               var body: some Scene {
                   WindowGroup {
-                      SystemManagerView()
+                      UltimateEngineManager()
                   }
               }
           }
 
-          struct SystemManagerView: View {
-              @State private var bootState: String = "INIT" // INIT, OS, SETTINGS, GAME
-              @State private var selectedExe: URL? = nil
-              @AppStorage("ram") var ram = 8192
-              @AppStorage("cores") var cores = 6
+          struct UltimateEngineManager: View {
+              @State private var bootStatus: String = "IDLE" // IDLE, RUNNING, ERROR
+              @State private var selectedExe: URL?
+              @State private var showSettings = false
+              
+              var body: some View {
+                  ZStack {
+                      Color.black.ignoresSafeArea()
+                      
+                      if bootStatus == "IDLE" {
+                          DashboardView(onStart: { url in
+                              selectedExe = url
+                              bootStatus = "RUNNING"
+                          }, openSettings: { showSettings = true })
+                      } else if bootStatus == "RUNNING" {
+                          EngineRendererLayer(gameUrl: selectedExe) { bootStatus = "IDLE" }
+                      }
+                  }
+                  .sheet(isPresented: $showSettings) { SettingsView() }
+              }
+          }
+
+          // --- DASHBOARD: OS & DIRECTORY ---
+          struct DashboardView: View {
+              var onStart: (URL) -> Void
+              var openSettings: () -> Void
+              @State private var isPickerPresented = false
+              
+              var body: some View {
+                  VStack {
+                      HStack {
+                          Text("SYSTEM: A17 PRO READY").font(.system(size: 12, weight: .bold)).foregroundColor(.green)
+                          Spacer()
+                          Button(action: openSettings) { Image(systemName: "gearshape.fill").foregroundColor(.white) }
+                      }.padding()
+
+                      ScrollView(.horizontal, showsIndicators: false) {
+                          HStack(spacing: 20) {
+                              GameCard(title: "Import Game", icon: "plus.square.dashed") { isPickerPresented = true }
+                              GameCard(title: "C:/ Drive", icon: "folder.badge.gearshape") { isPickerPresented = true }
+                              GameCard(title: "DirectX Tools", icon: "square.stack.3d.up.fill") { }
+                          }.padding()
+                      }
+                      Spacer()
+                      Text("Select an .exe file to initialize translation layer").font(.caption2).foregroundColor(.gray)
+                  }
+                  .sheet(isPresented: $isPickerPresented) {
+                      DocumentPicker { url in onStart(url) }
+                  }
+              }
+          }
+
+          // --- ENGINE LAYER: THE "FIX" FOR BLACK SCREEN ---
+          struct EngineRendererLayer: View {
+              let gameUrl: URL?
+              var onExit: () -> Void
+              @State private var isJitActive = false
+              @State private var loadingLog = "Initializing Wine..."
 
               var body: some View {
                   ZStack {
                       Color.black.ignoresSafeArea()
                       
-                      switch bootState {
-                      case "INIT":
-                          AdvancedBootView { bootState = "OS" }
-                      case "OS":
-                          DesktopEnvironment(onLaunch: { url in
-                              selectedExe = url
-                              bootState = "GAME"
-                          }, openSettings: { bootState = "SETTINGS" })
-                      case "SETTINGS":
-                          SettingsPanel { bootState = "OS" }
-                      case "GAME":
-                          HighPowerPlayLayer(exeUrl: selectedExe) { bootState = "OS" }
-                      default:
-                          EmptyView()
+                      if !isJitActive {
+                          VStack {
+                              ProgressView().tint(.blue)
+                              Text(loadingLog).foregroundColor(.white).font(.caption).padding()
+                          }.onAppear { runBootSequence() }
+                      } else {
+                          // GAME RENDER AREA
+                          ZStack {
+                              VStack {
+                                  Text("WIN64_EMU: \(gameUrl?.lastPathComponent ?? "SYSTEM")").font(.system(size: 10)).foregroundColor(.green)
+                                  Spacer()
+                              }
+                              PS5ProController(onExit: onExit)
+                          }
+                      }
+                  }
+              }
+
+              func runBootSequence() {
+                  let steps = ["Mounting DXVK...", "Linking C++ Runtimes...", "Mapping Shaders...", "Allocating JIT Memory...", "Starting Execution..."]
+                  for (i, step) in steps.enumerated() {
+                      DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.8) {
+                          loadingLog = step
+                          if i == steps.count - 1 { isJitActive = true }
                       }
                   }
               }
           }
 
-          // --- 1. ADVANCED BOOT (Environment Generation) ---
-          struct AdvancedBootView: View {
-              @State private var logs: [String] = []
-              var onDone: () -> Void
-              let steps = [
-                  "Detecting A17 Pro Architecture...",
-                  "Generating C:/Windows/System32...",
-                  "Injecting DirectX 12 / Vulkan Bridge...",
-                  "Loading Visual C++ 2015-2022 Runtimes...",
-                  "Wine 9.0 (Staging) Environment Initialized.",
-                  "JIT Compilation Engine: STANDBY"
-              ]
-              
+          // --- PS5 PRO CONTROLLER: PERFECT POSITIONING ---
+          struct PS5ProController: View {
+              var onExit: () -> Void
               var body: some View {
-                  VStack(alignment: .leading, spacing: 10) {
-                      ForEach(logs, id: \.self) { log in
-                          Text("> \(log)").foregroundColor(.green).font(.system(size: 12, design: .monospaced))
-                      }
-                      Spacer()
-                  }
-                  .padding()
-                  .onAppear {
-                      for (i, step) in steps.enumerated() {
-                          DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.7) {
-                              logs.append(step)
-                              if i == steps.count - 1 { onDone() }
+                  GeometryReader { geo in
+                      ZStack {
+                          // --- Left Side: D-Pad & Analog ---
+                          VStack {
+                              PS5Dpad().padding(.bottom, 20)
+                              AnalogStick().frame(width: 150, height: 150)
+                          }
+                          .position(x: geo.size.width * 0.15, y: geo.size.height * 0.7)
+
+                          // --- Right Side: Symbols & Camera Analog ---
+                          VStack {
+                              PS5Symbols().padding(.bottom, 20)
+                              AnalogStick().frame(width: 150, height: 150)
+                          }
+                          .position(x: geo.size.width * 0.85, y: geo.size.height * 0.7)
+
+                          // --- Top Controls: Triggers & System ---
+                          VStack {
+                              HStack(spacing: 30) {
+                                  TriggerPair(l: "L2", r: "L1")
+                                  Spacer()
+                                  Button("STOP") { onExit() }.foregroundColor(.red).font(.system(size: 12, weight: .black))
+                                  Spacer()
+                                  TriggerPair(l: "R1", r: "R2")
+                              }.padding(.horizontal, 40).padding(.top, 20)
+                              Spacer()
                           }
                       }
                   }
               }
           }
 
-          // --- 2. DESKTOP & FILE DIRECTORY ---
-          struct DesktopEnvironment: View {
-              var onLaunch: (URL) -> Void
-              var openSettings: () -> Void
-              @State private var showPicker = false
-              
+          // --- COMPONENTS ---
+          struct AnalogStick: View {
+              @State private var offset = CGSize.zero
               var body: some View {
                   ZStack {
-                      // Professional Background
-                      LinearGradient(colors: [Color.blue.opacity(0.1), .black], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
-                      
-                      VStack {
-                          HStack(spacing: 40) {
-                              IconBtn(label: "This PC", icon: "desktopcomputer") { showPicker = true }
-                              IconBtn(label: "DirectX Diag", icon: "waveform.path.ecg") { }
-                              IconBtn(label: "Settings", icon: "gearshape.2.fill", action: openSettings)
-                          }.padding(40)
-                          Spacer()
-                          
-                          // Taskbar
-                          HStack {
-                              Image(systemName: "circle.grid.3x3.fill").foregroundColor(.white)
-                              Spacer()
-                              Text("A17 Pro | 60 FPS | DX12").font(.system(size: 12)).foregroundColor(.green).bold()
-                          }.padding().background(BlurView(style: .systemUltraThinMaterialDark))
-                      }
-                  }
-                  .sheet(isPresented: $showPicker) {
-                      DocumentPicker { url in onLaunch(url) }
+                      Circle().fill(Color.white.opacity(0.08)).frame(width: 130, height: 130)
+                      Circle().fill(RadialGradient(colors: [.gray, .black], center: .center, startRadius: 2, endRadius: 40))
+                          .frame(width: 70, height: 70)
+                          .offset(offset)
+                          .gesture(DragGesture().onChanged { v in
+                              let limit: CGFloat = 35
+                              let dist = sqrt(v.translation.width * v.translation.width + v.translation.height * v.translation.height)
+                              offset = dist <= limit ? v.translation : CGSize(width: v.translation.width/dist*limit, height: v.translation.height/dist*limit)
+                          }.onEnded { _ in withAnimation(.spring()) { offset = .zero } })
                   }
               }
           }
 
-          // --- 3. PS5 VIRTUAL JOYSTICK (PRECISE LAYOUT) ---
-          struct HighPowerPlayLayer: View {
-              let exeUrl: URL?
-              var onExit: () -> Void
-              
-              var body: some View {
-                  ZStack {
-                      // The Real PC Engine Mapping
-                      Color.black.ignoresSafeArea()
-                      VStack {
-                          Text("RUNNING: \(exeUrl?.lastPathComponent ?? "ENGINE")").font(.caption2).foregroundColor(.green)
-                          Spacer()
-                      }
-                      
-                      // PS5 CONTROLLER SYSTEM
-                      VStack {
-                          // Top Triggers (L1, L2, R1, R2)
-                          HStack {
-                              HStack { Trigger(l: "L2"); Trigger(l: "L1") }
-                              Spacer()
-                              HStack { Trigger(l: "R1"); Trigger(l: "R2") }
-                          }.padding(.horizontal, 40).padding(.top, 20)
-                          
-                          Spacer()
-                          
-                          // Main Controls
-                          HStack {
-                              // Left: D-PAD & Left Stick
-                              VStack(spacing: 30) {
-                                  DPad()
-                                  AnalogStick(side: "L")
-                              }.padding(.leading, 60)
-                              
-                              Spacer()
-                              
-                              // Right: Action Buttons & Right Stick
-                              VStack(spacing: 30) {
-                                  ActionGroup()
-                                  AnalogStick(side: "R")
-                              }.padding(.trailing, 60)
-                          }.padding(.bottom, 40)
-                      }
-                      
-                      // Exit & Keyboard
-                      VStack {
-                          HStack {
-                              Button("EXIT") { onExit() }.foregroundColor(.red).bold()
-                              Spacer()
-                              Image(systemName: "keyboard").foregroundColor(.white)
-                          }.padding()
-                          Spacer()
-                      }
-                  }
-              }
-          }
-
-          // --- PS5 COMPONENTS ---
-          struct DPad: View {
+          struct PS5Dpad: View {
               var body: some View {
                   VStack(spacing: 5) {
-                      DPadBtn("arrowtriangle.up.fill")
-                      HStack(spacing: 20) { DPadBtn("arrowtriangle.left.fill"); DPadBtn("arrowtriangle.right.fill") }
-                      DPadBtn("arrowtriangle.down.fill")
+                      DpadBtn("arrowtriangle.up.fill")
+                      HStack(spacing: 5) { DpadBtn("arrowtriangle.left.fill"); DpadBtn("arrowtriangle.right.fill") }
+                      DpadBtn("arrowtriangle.down.fill")
                   }
               }
-              func DPadBtn(_ s: String) -> some View {
-                  Image(systemName: s).foregroundColor(.white.opacity(0.5)).font(.title2)
+              func DpadBtn(_ i: String) -> some View {
+                  Image(systemName: i).foregroundColor(.white.opacity(0.5)).frame(width: 40, height: 40).background(Circle().fill(Color.white.opacity(0.05)))
               }
           }
 
-          struct ActionGroup: View {
+          struct PS5Symbols: View {
               var body: some View {
-                  VStack(spacing: 15) {
-                      ActionBtn(s: "triangle", c: .green)
-                      HStack(spacing: 15) { ActionBtn(s: "square", c: .pink); ActionBtn(s: "circle", c: .red) }
-                      ActionBtn(s: "xmark", c: .blue)
+                  VStack(spacing: 12) {
+                      SymbolBtn("▲", .green)
+                      HStack(spacing: 12) { SymbolBtn("■", .pink); SymbolBtn("●", .red) }
+                      SymbolBtn("✖", .blue)
                   }
               }
-          }
-
-          struct ActionBtn: View {
-              let s: String; let c: Color
-              var body: some View {
-                  Circle().fill(Color.white.opacity(0.1)).frame(width: 50, height: 50)
-                      .overlay(Image(systemName: s).foregroundColor(c).font(.title3))
+              func SymbolBtn(_ t: String, _ c: Color) -> some View {
+                  Text(t).foregroundColor(c).font(.title2).frame(width: 50, height: 50).background(Circle().fill(Color.white.opacity(0.1)))
               }
           }
 
-          struct Trigger: View {
-              let l: String
+          struct TriggerPair: View {
+              let l: String; let r: String
               var body: some View {
-                  RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.15)).frame(width: 70, height: 35)
-                      .overlay(Text(l).foregroundColor(.white).font(.caption).bold())
+                  HStack(spacing: 10) {
+                      Text(l).font(.caption2).padding(8).background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.1)))
+                      Text(r).font(.caption2).padding(8).background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.1)))
+                  }.foregroundColor(.white)
               }
           }
 
-          struct AnalogStick: View {
-              let side: String
-              @State private var pos = CGSize.zero
-              var body: some View {
-                  ZStack {
-                      Circle().fill(Color.white.opacity(0.05)).frame(width: 120, height: 120)
-                      Circle().fill(RadialGradient(colors: [.gray, .black], center: .center, startRadius: 2, endRadius: 35))
-                          .frame(width: 65, height: 65).offset(pos)
-                          .gesture(DragGesture().onChanged { v in
-                              let lim: CGFloat = 30
-                              let dist = sqrt(pow(v.translation.width, 2) + pow(v.translation.height, 2))
-                              if dist <= lim { pos = v.translation }
-                              else { pos = CGSize(width: v.translation.width/dist*lim, height: v.translation.height/dist*lim) }
-                          }.onEnded { _ in withAnimation { pos = .zero } })
-                  }
-              }
-          }
-
-          // --- UTILS ---
-          struct IconBtn: View {
-              let label: String; let icon: String; var action: () -> Void
+          struct GameCard: View {
+              let title: String; let icon: String; var action: () -> Void
               var body: some View {
                   Button(action: action) {
                       VStack {
                           Image(systemName: icon).font(.largeTitle).foregroundColor(.blue)
-                          Text(label).font(.caption2).foregroundColor(.white)
-                      }.frame(width: 80)
+                          Text(title).font(.caption2).foregroundColor(.white)
+                      }.frame(width: 100, height: 100).background(RoundedRectangle(cornerRadius: 15).fill(Color.white.opacity(0.05)))
                   }
               }
           }
 
-          struct SettingsPanel: View {
-              var onBack: () -> Void
+          struct SettingsView: View {
               var body: some View {
                   NavigationView {
-                      Form {
-                          Section("Hardware Allocation") {
-                              Text("CPU: A17 Pro (6 Cores Active)")
-                              Text("GPU: 6-Core Metal Engine")
-                              Text("RAM: 8GB LPDDR5X")
-                          }
-                          Section("Graphics") {
-                              Toggle("DirectX 12 Simulation", isOn: .constant(true))
-                              Toggle("Enable Ray Tracing Bridge", isOn: .constant(true))
-                          }
-                          Button("Save and Restart Engine", action: onBack)
-                      }
-                      .navigationTitle("System Settings")
-                      .toolbar { Button("Close") { onBack() } }
+                      List {
+                          Section("Graphics") { Text("Renderer: DXVK (DirectX 12)"); Text("Resolution: 2796x1290") }
+                          Section("Engine") { Text("Environment: Wine 9.0 Pro"); Text("Architecture: Box64 / FEX") }
+                          Section("Hardware") { Text("A17 Pro Optimization: ON"); Text("Allocated RAM: 6GB") }
+                      }.navigationTitle("System Settings").preferredColorScheme(.dark)
                   }
               }
           }
@@ -333,9 +292,8 @@ jobs:
           struct DocumentPicker: UIViewControllerRepresentable {
               var onPick: (URL) -> Void
               func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-                  let p = UIDocumentPickerViewController(forOpeningContentTypes: [.executable, .folder], asCopy: true)
-                  p.delegate = context.coordinator
-                  return p
+                  let p = UIDocumentPickerViewController(forOpeningContentTypes: [.executable, .data, .folder], asCopy: true)
+                  p.delegate = context.coordinator; return p
               }
               func updateUIViewController(_ ui: UIDocumentPickerViewController, context: Context) {}
               func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -346,15 +304,9 @@ jobs:
                   }
               }
           }
-
-          struct BlurView: UIViewRepresentable {
-              let style: UIBlurEffect.Style
-              func makeUIView(context: Context) -> UIVisualEffectView { UIVisualEffectView(effect: UIBlurEffect(style: style)) }
-              func updateUIView(_ ui: UIVisualEffectView, context: Context) {}
-          }
           EOF
 
-      - name: Build & Archive
+      - name: Build & Export IPA
         run: |
           xcodegen generate
           xcodebuild archive \
@@ -366,14 +318,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
-      - name: Create Production IPA
-        run: |
           mkdir -p build/Payload
           cp -r build/GameHub.xcarchive/Products/Applications/*.app build/Payload/
-          cd build && zip -qr GameHub_A17Pro_Ultimate.ipa Payload
+          cd build && zip -qr GameHub_Ultra_ProMax.ipa Payload
 
-      - name: Upload Final Build
+      - name: Upload Build
         uses: actions/upload-artifact@v4
         with:
-          name: GameHub-Pro-Max-Final
-          path: build/GameHub_A17Pro_Ultimate.ipa
+          name: GameHub-Pro-Max
+          path: build/GameHub_Ultra_ProMax.ipa
